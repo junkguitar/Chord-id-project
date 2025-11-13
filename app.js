@@ -1,187 +1,287 @@
-let audioCtx;
+// =======================
+//  High-Quality Audio Engine
+//  Grand piano samples + metronome + chord vamps
+// =======================
 
-function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+(function () {
+  // Expose a single global object
+  const AudioEngine = {};
+  window.AudioEngine = AudioEngine;
 
-        // Required for iOS: play a silent buffer inside the click event
-        const buffer = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
-        const dummy = audioCtx.createBufferSource();
-        dummy.buffer = buffer;
-        dummy.connect(audioCtx.destination);
-        dummy.start(0);
+  // ---------- Private state ----------
+  let audioCtx = null;
+  let masterGain = null;
+  let metroGain = null;
+  let sampleManager = null;
+  let currentVampTimer = null;
 
-        console.log("Audio unlocked");
+  // Config
+  const MIN_MIDI = 36;
+  const MAX_MIDI = 84;
+
+  // ---------- Utilities ----------
+  function log(...args) {
+    console.log("[AudioEngine]", ...args);
+  }
+
+  function ensureCtxTimeOffset(t) {
+    const now = audioCtx.currentTime;
+    if (typeof t !== "number" || t < now + 0.001) {
+      return now + 0.001;
+    }
+    return t;
+  }
+
+  // ---------- Sample Manager ----------
+  class SampleManager {
+    constructor(ctx, outputNode) {
+      this.ctx = ctx;
+      this.output = outputNode;
+      this.buffers = new Map(); // midi -> AudioBuffer
     }
 
-    if (audioCtx.state === "suspended") {
-        audioCtx.resume();
+    buildSampleUrls(midi) {
+      const n = String(midi);
+      const n3 = n.padStart(3, "0");
+      return [
+        `piano-samples/midi-${n}.wav`,
+        `piano-samples/piano-${n}.wav`,
+        `piano-samples/${n}.wav`,
+        `piano-samples/${n3}.wav`,
+        `piano-samples/piano_${n}.wav`,
+      ];
     }
-}
-// app.js - Jazz Chord Trainer PWA (uses preloaded piano-samples/<midi>.wav)
-const SR = 44100;
-const SAMPLE_PATH = 'piano-samples/'; // contains 36..84.wav
-const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
-const KEY_LIST = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
-const QUALITY_ORDER = ["maj7","6/9","m7","m9","m11","7","13","7b9","7#9","7#11","7b13","7alt","m7b5","dim7","mMaj7"];
-const CHORD_QUALITIES = {"maj7":[0,4,7,11],"6/9":[0,4,7,9,14],"m7":[0,3,7,10],"m9":[0,3,7,10,14],"m11":[0,3,7,10,14,17],"7":[0,4,7,10],"13":[0,4,7,10,14,21],"7b9":[0,4,7,10,13],"7#9":[0,4,7,10,15],"7#11":[0,4,7,10,18],"7b13":[0,4,7,10,20],"7alt":[0,4,7,10,13,15,18,20],"m7b5":[0,3,6,10],"dim7":[0,3,6,9],"mMaj7":[0,3,7,11]};
 
-let audioCtx = null;
-let bufferCache = {};
-let running = false;
-let qualities = new Set(QUALITY_ORDER);
-let keys = new Set(KEY_LIST);
-let order = 'random';
-let current = {root:'C', quality:'maj7', voicing:[]};
+    async loadNote(midi) {
+      if (this.buffers.has(midi)) {
+        return this.buffers.get(midi);
+      }
+      const urls = this.buildSampleUrls(midi);
+      for (const url of urls) {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const arr = await resp.arrayBuffer();
+          const buf = await this.ctx.decodeAudioData(arr);
+          this.buffers.set(midi, buf);
+          log(`Loaded sample for MIDI ${midi} from ${url}`);
+          return buf;
+        } catch (e) {
+          // try next pattern
+        }
+      }
+      log(`⚠️ No sample found for MIDI ${midi}`);
+      this.buffers.set(midi, null);
+      return null;
+    }
 
-async function startAudio(){
-  if (audioCtx) return;
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  window.master = audioCtx.createGain(); window.master.gain.value = 0.9; window.master.connect(audioCtx.destination);
-  await preloadSamples();
-}
+    async preloadRange(minMidi, maxMidi) {
+      for (let m = minMidi; m <= maxMidi; m++) {
+        await this.loadNote(m);
+      }
+    }
 
-async function preloadSamples(){
-  const midiList = Array.from({length: 85-36}, (_,i)=>i+36);
-  const promises = midiList.map(m=>fetch(`${SAMPLE_PATH}${m}.wav`).then(r=>r.arrayBuffer()).then(b=>audioCtx.decodeAudioData(b)).then(buf=>{ bufferCache[m]=buf; }));
-  await Promise.all(promises);
-  console.log('Loaded', Object.keys(bufferCache).length, 'samples');
-}
+    playNote(midi, when, duration, velocity = 0.9) {
+      const buf = this.buffers.get(midi);
+      if (!buf) return;
 
-function midiForRoot(name){
-  const map = {'C':0,'Db':1,'D':2,'Eb':3,'E':4,'F':5,'Gb':6,'G':7,'Ab':8,'A':9,'Bb':10,'B':11};
-  return 48 + (map[name]||0);
-}
+      when = ensureCtxTimeOffset(when);
+      const ctx = this.ctx;
 
-function buildVoicing(rootMidi, intervals, voicing='drop2', register_mid=60, extensions='high'){
-  let ints = intervals;
-  if (JSON.stringify(ints) === JSON.stringify(CHORD_QUALITIES['7alt'])){
-    const alts=[13,15,18,20]; ints = [0,4,7,10, alts[Math.floor(Math.random()*alts.length)], alts[Math.floor(Math.random()*alts.length)]];
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+
+      const g = ctx.createGain();
+      const amp = Math.max(0.0, Math.min(1.0, velocity));
+
+      const attack = 0.005;
+      const release = 0.35;
+
+      g.gain.setValueAtTime(0.0, when);
+      g.gain.linearRampToValueAtTime(amp, when + attack);
+      g.gain.setTargetAtTime(0.0, when + duration, release);
+
+      src.connect(g).connect(this.output);
+
+      src.start(when);
+      src.stop(when + duration + 2.0);
+    }
   }
-  const basics = new Set([0,3,4,7,10,11]);
-  let kept = [];
-  for(const iv of ints){
-    if (extensions==='none'){ if (basics.has(iv)) kept.push(iv); }
-    else if (extensions==='basic'){ if (basics.has(iv) || iv===13 || iv===14) kept.push(iv); }
-    else kept.push(iv);
-  }
-  if (!kept.includes(0)) kept.push(0);
-  if (!kept.includes(7)) kept.push(7);
-  kept = Array.from(new Set(kept)).sort((a,b)=>a-b);
-  if (kept.length>6){
-    const core=[0,4,7,10,11,3];
-    const coreKeep = kept.filter(iv=>core.includes(iv));
-    const others = kept.filter(iv=>!core.includes(iv));
-    others.sort(()=>Math.random()-0.5);
-    kept = Array.from(new Set(coreKeep.concat(others.slice(0, Math.max(0, 6-coreKeep.length)))));
-    kept.sort((a,b)=>a-b);
-  }
-  let notes = kept.map(iv=>rootMidi+iv);
-  const target = [];
-  for(let n of notes){
-    while(n < register_mid - 7) n += 12;
-    while(n > register_mid + 9) n -= 12;
-    target.push(n);
-  }
-  target.sort((a,b)=>a-b);
-  if (voicing==='drop2' && target.length>=4){
-    const s2 = target[target.length-2]-12;
-    const v = target.slice(0,-2).concat([s2, target[target.length-1]]);
-    return Array.from(new Set(v)).sort((a,b)=>a-b);
-  }
-  return Array.from(new Set(target));
-}
 
-function playSample(midi, when=0, gain=1.0, pan=0){
-  const buf = bufferCache[midi];
-  if (!buf) return null;
-  const src = audioCtx.createBufferSource();
-  src.buffer = buf;
-  const g = audioCtx.createGain(); g.gain.value = gain;
-  const p = audioCtx.createStereoPanner(); p.pan.value = pan;
-  src.connect(g); g.connect(p); p.connect(window.master);
-  src.start(audioCtx.currentTime + when);
-  return src;
-}
+  // ---------- Metronome ----------
+  function scheduleClick(time, isDownbeat) {
+    time = ensureCtxTimeOffset(time);
+    const ctx = audioCtx;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
 
-function playVoicing(noteList, mode='block'){
-  // noteList is list of MIDI numbers
-  const now = 0; // relative
-  if (mode === 'block'){
-    noteList.forEach((m,i)=>{
-      playSample(m, 0, 1.0, (i/(noteList.length-1))*2-1);
-    });
-  } else if (mode === 'arp'){
-    noteList.forEach((m,i)=>{
-      playSample(m, i*0.06, 0.95, (i/(noteList.length-1))*2-1);
-    });
-  } else { // both
-    noteList.forEach((m,i)=>{
-      playSample(m, 0, 1.0, (i/(noteList.length-1))*2-1);
-      playSample(m, i*0.04 + 0.06, 0.6, (i/(noteList.length-1))*2-1);
+    const freq = isDownbeat ? 2000 : 1400;
+    const dur = 0.05;
+    const peak = isDownbeat ? 0.7 : 0.5;
+
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(peak, time + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+    osc.connect(g).connect(metroGain);
+    osc.start(time);
+    osc.stop(time + dur);
+  }
+
+  // ---------- Chord scheduling ----------
+  function scheduleBlockChord(midiNotes, startTime, sustainSeconds) {
+    const baseTime = ensureCtxTimeOffset(startTime);
+    const micro = 0.003; // small spread to hear each tone
+    midiNotes.forEach((m, i) => {
+      sampleManager.playNote(m, baseTime + i * micro, sustainSeconds, 0.95);
     });
   }
-}
 
-function chooseRootRandom(){
-  const arr = Array.from(keys);
-  const r = arr[Math.floor(Math.random()*arr.length)];
-  return r;
-}
+  function scheduleArpeggio(midiNotes, startTime, sustainSeconds, secPerBeat) {
+    const baseTime = ensureCtxTimeOffset(startTime);
+    const span = Math.min(secPerBeat * 0.9, 0.7); // how long to sweep through notes
+    const step = Math.max(0.04, span / Math.max(1, midiNotes.length));
 
-function pickRandomQuality(){
-  const arr = Array.from(qualities);
-  return arr[Math.floor(Math.random()*arr.length)];
-}
-
-async function nextChordPlay(){
-  if (!audioCtx) await startAudio();
-  const quality = pickRandomQuality();
-  const rootName = chooseRootRandom();
-  const intervals = CHORD_QUALITIES[quality] || CHORD_QUALITIES['maj7'];
-  const rootMidi = midiForRoot(rootName);
-  const voicing = buildVoicing(rootMidi, intervals, 'drop2', 60, 'high');
-  current = {root:rootName, quality, voicing};
-  document.getElementById('nowChord').textContent = `${rootName}${quality}`;
-  const mode = document.querySelector('input[name="mode"]:checked').value;
-  playVoicing(voicing, mode);
-}
-
-document.getElementById('start').onclick = ()=> startAudio();
-document.getElementById('startSession').onclick = ()=> { nextChordPlay(); };
-document.getElementById('stopSession').onclick = ()=> { /* future: stop/clear */ };
-
-window.addEventListener('keydown', (e)=>{
-  if (e.code === 'Space'){
-    e.preventDefault();
-    nextChordPlay();
+    midiNotes.forEach((m, i) => {
+      const t = baseTime + i * step;
+      sampleManager.playNote(m, t, sustainSeconds * 0.9, 0.95);
+    });
   }
-});
 
-// UI build for qualities & keys
-function mkPills(containerId, items, setRef){
-  const cont = document.getElementById(containerId);
-  cont.innerHTML = '';
-  items.forEach(it=>{
-    const d = document.createElement('div');
-    d.className = 'pill' + (setRef.has(it)?' active':'');
-    d.textContent = it;
-    d.onclick = ()=>{ if (setRef.has(it)) setRef.delete(it); else setRef.add(it); d.classList.toggle('active'); };
-    cont.appendChild(d);
-  });
-}
-mkPills('qualities', QUALITY_ORDER, qualities);
-mkPills('keys', KEY_LIST, keys);
+  // ---------- Vamp loop ----------
+  function startChordVamp(midiNotes, options) {
+    if (!audioCtx || !sampleManager) {
+      log("AudioEngine not initialized");
+      return;
+    }
+    // stop existing loop
+    if (currentVampTimer) {
+      clearInterval(currentVampTimer);
+      currentVampTimer = null;
+    }
 
-document.getElementById('allQ').onclick = ()=>{ QUALITY_ORDER.forEach(q=>qualities.add(q)); mkPills('qualities', QUALITY_ORDER, qualities); };
-document.getElementById('noneQ').onclick = ()=>{ qualities.clear(); mkPills('qualities', QUALITY_ORDER, qualities); };
-document.getElementById('allK').onclick = ()=>{ KEY_LIST.forEach(k=>keys.add(k)); mkPills('keys', KEY_LIST, keys); };
-document.getElementById('noneK').onclick = ()=>{ keys.clear(); mkPills('keys', KEY_LIST, keys); };
+    const bpm = options.bpm || 96;
+    const bars = options.bars || 8;
+    const sustain = options.sustain || 3.0;
+    const mode = options.mode || "block"; // "block", "arpeggio", "both"
+    const metronome = !!options.metronome;
+    const swing = !!options.swing;
 
-// register service worker
-if ('serviceWorker' in navigator){ navigator.serviceWorker.register('service-worker.js').then(()=>console.log('sw ok')); }
+    const beatsPerBar = 4;
+    const secPerBeat = 60 / bpm;
+    const loopDur = bars * beatsPerBar * secPerBeat;
 
-// install prompt handling
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredPrompt = e; document.getElementById('installBtn').style.display = 'inline-block'; });
-document.getElementById('installBtn').onclick = async ()=>{ if (deferredPrompt){ deferredPrompt.prompt(); const choice = await deferredPrompt.userChoice; console.log(choice); } };
+    function scheduleOneLoop(offsetSeconds) {
+      const startBase = ensureCtxTimeOffset(audioCtx.currentTime + offsetSeconds);
+      for (let b = 0; b < bars * beatsPerBar; b++) {
+        const beatIndex = b % beatsPerBar;
+        let t = startBase + b * secPerBeat;
+        if (swing && (beatIndex === 1 || beatIndex === 3)) {
+          t += secPerBeat * 0.07; // light swing on off-beats
+        }
+
+        if (mode === "block" || mode === "both") {
+          scheduleBlockChord(midiNotes, t, sustain);
+        }
+        if (mode === "arpeggio" || mode === "both") {
+          scheduleArpeggio(midiNotes, t, sustain, secPerBeat);
+        }
+        if (metronome) {
+          scheduleClick(t, beatIndex === 0);
+        }
+      }
+    }
+
+    // schedule first loop immediately
+    scheduleOneLoop(0.05);
+
+    // schedule repeated loops
+    currentVampTimer = setInterval(() => {
+      scheduleOneLoop(0.05);
+    }, loopDur * 1000);
+  }
+
+  // ---------- AudioContext init / teardown ----------
+  function unlockContext(ctx) {
+    // iOS requires a sound to start in a user gesture
+    const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start(0);
+  }
+
+  async function init() {
+    if (audioCtx && audioCtx.state !== "closed") {
+      await audioCtx.resume();
+      return;
+    }
+
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) {
+      alert("Web Audio API not supported in this browser.");
+      return;
+    }
+
+    audioCtx = new Ctor({ latencyHint: "interactive" });
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.9;
+    masterGain.connect(audioCtx.destination);
+
+    metroGain = audioCtx.createGain();
+    metroGain.gain.value = 0.7;
+    metroGain.connect(masterGain);
+
+    sampleManager = new SampleManager(audioCtx, masterGain);
+
+    unlockContext(audioCtx);
+
+    log("Preloading piano samples...");
+    await sampleManager.preloadRange(MIN_MIDI, MAX_MIDI);
+    log("Piano samples ready.");
+  }
+
+  async function stopAll() {
+    if (currentVampTimer) {
+      clearInterval(currentVampTimer);
+      currentVampTimer = null;
+    }
+    if (audioCtx && audioCtx.state !== "closed") {
+      try {
+        await audioCtx.close();
+      } catch (e) {
+        // ignore
+      }
+    }
+    audioCtx = null;
+    masterGain = null;
+    metroGain = null;
+    sampleManager = null;
+  }
+
+  // ---------- Public API ----------
+  AudioEngine.init = init; // must be called from a user gesture (e.g., Start Audio click)
+
+  /**
+   * Start a looping chord vamp.
+   * @param {number[]} midiNotes - chord voicing as MIDI numbers.
+   * @param {object} options:
+   *   - bpm: number
+   *   - bars: number
+   *   - sustain: seconds
+   *   - mode: "block" | "arpeggio" | "both"
+   *   - metronome: boolean
+   *   - swing: boolean
+   */
+  AudioEngine.playChordVamp = function (midiNotes, options) {
+    startChordVamp(midiNotes, options || {});
+  };
+
+  AudioEngine.stopAll = stopAll;
+
+  AudioEngine.isReady = function () {
+    return !!(audioCtx && sampleManager);
+  };
+})();
