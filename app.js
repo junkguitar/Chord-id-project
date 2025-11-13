@@ -1,3 +1,23 @@
+let audioCtx;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Required for iOS: play a silent buffer inside the click event
+        const buffer = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+        const dummy = audioCtx.createBufferSource();
+        dummy.buffer = buffer;
+        dummy.connect(audioCtx.destination);
+        dummy.start(0);
+
+        console.log("Audio unlocked");
+    }
+
+    if (audioCtx.state === "suspended") {
+        audioCtx.resume();
+    }
+}
 // app.js - Jazz Chord Trainer PWA (uses preloaded piano-samples/<midi>.wav)
 const SR = 44100;
 const SAMPLE_PATH = 'piano-samples/'; // contains 36..84.wav
