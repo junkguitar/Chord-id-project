@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jazz Chord Trainer — PWA (Grand Piano)</title>
+<link rel="manifest" href="manifest.json">
+<style>
+:root{--bg:#0b0f14;--fg:#eaf2fb;--muted:#9fb0c3;--card:#0f1720;--accent:#7cc4ff}
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:var(--bg);color:var(--fg)}
+.wrap{max-width:980px;margin:18px auto;padding:18px}
+.header{display:flex;justify-content:space-between;align-items:center}
+.h1{font-size:22px}
+.card{background:var(--card);padding:12px;border-radius:12px;margin-top:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.pill{padding:6px 10px;border-radius:999px;background:#0b1a24;border:1px solid #183044;cursor:pointer}
+.pill.active{background:#133349;border-color:#3b6ea0;color:#bfe9ff}
+.controls label{display:inline-flex;align-items:center;gap:8px;margin-right:10px}
+.button{background:var(--accent);color:#022; padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+.small{color:var(--muted);font-size:13px}
+.big{font-size:34px;margin:8px 0}
+.kbd{background:#07121a;padding:4px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div><div class="h1">🎹 Jazz Chord Trainer — Offline Grand Piano</div><div class="small">Block & Arpeggio • Preloaded samples • Install on iPhone</div></div>
+    <div><button id="installBtn" class="button">Install</button></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><button id="start" class="button">Start Audio</button><button id="startSession" class="button">Start Session</button><button id="stopSession" class="button">Stop</button></div>
+    <div class="big" id="nowChord">—</div>
+    <div class="small" id="hint">Space to advance • Choose qualities & keys below • Toggle Block/Arp</div>
+  </div>
+
+  <div class="card">
+    <div><strong>Playback</strong></div>
+    <div class="row" style="margin-top:8px">
+      <label><input type="radio" name="mode" value="block" checked> Block</label>
+      <label><input type="radio" name="mode" value="arp"> Arpeggio</label>
+      <label><input type="radio" name="mode" value="both"> Both</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center"><strong>Qualities</strong>
+      <div><button id="allQ" class="pill">All</button> <button id="noneQ" class="pill">None</button></div></div>
+    <div id="qualities" class="row" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center"><strong>Keys</strong>
+      <div><button id="allK" class="pill">All</button> <button id="noneK" class="pill">None</button></div></div>
+    <div id="keys" class="row" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card small">
+    <div class="row">
+      <label>BPM <input id="bpm" type="number" value="96" min="30" max="300"></label>
+      <label>Bars <input id="bars" type="number" value="8" min="1" max="32"></label>
+      <label>Sustain(s) <input id="sustain" type="number" step="0.5" value="3" min="0.5"></label>
+      <label><input id="metronome" type="checkbox"> Metronome</label>
+      <label><input id="swing" type="checkbox"> Swing</label>
+    </div>
+  </div>
+
+  <div class="card small">
+    <div>Offline ready — all samples cached on first load. To install on iPhone: open in Safari → Share → Add to Home Screen.</div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
