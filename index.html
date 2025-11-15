@@ -1,227 +1,345 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Jazz Chord Trainer — Grand Piano</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #05070a;
-      color: #e9f0ff;
-    }
-    header {
-      padding: 16px 20px;
-      background: #0b1018;
-      border-bottom: 1px solid #1b2233;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 20px;
-    }
-    header small {
-      opacity: 0.7;
-      font-size: 12px;
-    }
-    main {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 16px 16px 40px;
-    }
-    .card {
-      background: #0d121c;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-      border: 1px solid #182030;
-    }
-    .row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-    .row + .row {
-      margin-top: 8px;
-    }
-    .section-title {
-      font-size: 13px;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      opacity: 0.7;
-      margin-bottom: 6px;
-    }
-    button, input, label {
-      font-family: inherit;
-      font-size: 14px;
-    }
-    .btn {
-      border: none;
-      border-radius: 999px;
-      padding: 6px 14px;
-      cursor: pointer;
-      background: #1b2335;
-      color: #e9f0ff;
-      transition: background 0.15s, transform 0.05s;
-    }
-    .btn:hover {
-      background: #24304a;
-    }
-    .btn:active {
-      transform: scale(0.97);
-    }
-    .btn-primary {
-      background: #2f6bff;
-    }
-    .btn-primary:hover {
-      background: #3c79ff;
-    }
-    .btn-danger {
-      background: #b02a3c;
-    }
-    .chip {
-      border-radius: 999px;
-      padding: 4px 10px;
-      border: 1px solid #27324a;
-      background: #0a101b;
-      cursor: pointer;
-      font-size: 13px;
-      opacity: 0.85;
-      user-select: none;
-    }
-    .chip.active {
-      background: #2f6bff;
-      border-color: #2f6bff;
-      color: #fff;
-      opacity: 1;
-    }
-    .chip-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .field-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-      margin-top: 8px;
-    }
-    .field-row label {
-      font-size: 13px;
-      opacity: 0.8;
-    }
-    .field-row input[type="number"] {
-      width: 70px;
-      padding: 4px 6px;
-      border-radius: 6px;
-      border: 1px solid #27324a;
-      background: #05070a;
-      color: #e9f0ff;
-    }
-    .radio-row label {
-      margin-right: 12px;
-      font-size: 13px;
-      opacity: 0.85;
-      cursor: pointer;
-    }
-    .status-line {
-      font-size: 13px;
-      opacity: 0.8;
-      margin-top: 6px;
-    }
-    .status-strong {
-      font-size: 18px;
-      margin-top: 4px;
-    }
-    .hint {
-      font-size: 12px;
-      opacity: 0.75;
-      margin-top: 4px;
-    }
-    .log {
-      font-size: 11px;
-      white-space: pre-wrap;
-      background: #05070d;
-      border-radius: 8px;
-      border: 1px solid #141b27;
-      padding: 8px;
-      max-height: 160px;
-      overflow-y: auto;
-      margin-top: 6px;
-    }
-  </style>
-</head>
+// app.js — Jazz Chord Trainer using Tone.Sampler + Salamander Grand + simple Bass Root synth
 
-<body>
-  <header>
-    <h1>Jazz Chord Trainer — Grand Piano</h1>
-    <small>Random roots • Jazz qualities • SPACE or button to advance</small>
-  </header>
+document.addEventListener('DOMContentLoaded', () => {
 
-  <main>
-    <!-- Session -->
-    <section class="card">
-      <div class="section-title">Session</div>
-      <div class="row">
-        <button id="btnStartAudio" class="btn btn-primary">Start Audio</button>
-        <button id="btnStartSession" class="btn">Start Session</button>
-        <button id="btnNextChord" class="btn">Next Chord</button>
-        <button id="btnStopSession" class="btn btn-danger">Stop</button>
-      </div>
-      <div class="hint">
-        First tap <b>Start Audio</b> (required on iPhone/iPad), then <b>Start Session</b>.<br>
-        On phone, tap <b>Next Chord</b> to advance. On desktop you can also press <b>SPACE</b>.
-      </div>
-    </section>
+  // ---------- Music theory helpers ----------
 
-    <!-- Playback -->
-    <section class="card">
-      <div class="section-title">Playback</div>
-      <div class="row radio-row">
-        <label><input type="radio" name="playbackMode" value="block" checked> Block</label>
-        <label><input type="radio" name="playbackMode" value="arp"> Arpeggio</label>
-        <label><input type="radio" name="playbackMode" value="both"> Both</label>
-      </div>
-      <div class="field-row">
-        <label>BPM <input type="number" id="bpmInput" value="96" min="40" max="220"></label>
-        <label>Sustain (s) <input type="number" id="sustainInput" value="3" min="1" max="10" step="0.5"></label>
-      </div>
-    </section>
+  const NOTE_TO_SEMITONE = {
+    C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5,
+    'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11
+  };
 
-    <!-- Qualities -->
-    <section class="card">
-      <div class="section-title">Qualities</div>
-      <div id="qualitiesRow" class="chip-row"></div>
-      <div class="hint">Tap to include / exclude. If none selected, all are used.</div>
-    </section>
+  const SEMITONE_TO_NOTE_SHARP = [
+    'C','C#','D','D#','E','F','F#','G','G#','A','A#','B'
+  ];
 
-    <!-- Keys -->
-    <section class="card">
-      <div class="section-title">Keys</div>
-      <div id="keysRow" class="chip-row"></div>
-      <div class="hint">Tap keys to practice. If none selected, all 12 roots are used.</div>
-    </section>
+  const CHORD_QUALITIES = {
+    maj7:  [0, 4, 7, 11],
+    '6/9': [0, 4, 7, 9, 14],
+    m7:    [0, 3, 7, 10],
+    m9:    [0, 3, 7, 10, 14],
+    m11:   [0, 3, 7, 10, 14, 17],
+    7:     [0, 4, 7, 10],
+    13:    [0, 4, 7, 10, 14, 21],
+    '7b9': [0, 4, 7, 10, 13],
+    '7#9': [0, 4, 7, 10, 15],
+    '7#11':[0, 4, 7, 10, 18],
+    '7b13':[0, 4, 7, 10, 20],
+    '7alt':[0, 4, 7, 10, 13, 15, 18, 20],
+    m7b5:  [0, 3, 6, 10],
+    dim7:  [0, 3, 6, 9],
+    mMaj7: [0, 3, 7, 11],
+  };
 
-    <!-- Current chord -->
-    <section class="card">
-      <div class="section-title">Current chord</div>
-      <div id="statusLine" class="status-line">Session idle.</div>
-      <div id="chordLabel" class="status-strong">—</div>
-      <div id="scaleHint" class="hint"></div>
-    </section>
+  const SCALE_SUGGESTIONS = {
+    maj7:  "Major (Ionian) or Lydian (#11)",
+    '6/9': "Major pentatonic / Major scale",
+    m7:    "Dorian / Aeolian; minor pentatonic/blues",
+    m9:    "Dorian with 9; melodic minor on IV",
+    m11:   "Dorian; avoid natural 3",
+    7:     "Mixolydian; blues; bebop dominant",
+    13:    "Mixolydian with 13; avoid 11 or #11",
+    '7b9': "Phrygian dominant or altered; dim H-W",
+    '7#9': "Altered scale; minor pentatonic superimposition",
+    '7#11':"Lydian dominant (melodic minor on V)",
+    '7b13':"Mixolydian b13 (melodic minor Mode 5)",
+    '7alt':"Altered (melodic minor b7) / dim H-W",
+    m7b5:  "Locrian / Locrian #2",
+    dim7:  "Whole-Half diminished",
+    mMaj7: "Melodic minor (ascending)",
+  };
 
-    <!-- Log -->
-    <section class="card">
-      <div class="section-title">Debug / Log</div>
-      <div id="logBox" class="log"></div>
-    </section>
-  </main>
+  const ROOTS = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
 
-  <!-- Tone.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-  <!-- App logic -->
-  <script src="app.js"></script>
-</body>
-</html>
+  // ---------- UI elements ----------
+
+  const qualitiesRow = document.getElementById('qualitiesRow');
+  const keysRow      = document.getElementById('keysRow');
+  const statusLine   = document.getElementById('statusLine');
+  const chordLabel   = document.getElementById('chordLabel');
+  const scaleHint    = document.getElementById('scaleHint');
+  const logBox       = document.getElementById('logBox');
+
+  const btnStartAudio   = document.getElementById('btnStartAudio');
+  const btnStartSession = document.getElementById('btnStartSession');
+  const btnNextChord    = document.getElementById('btnNextChord');
+  const btnStopSession  = document.getElementById('btnStopSession');
+  const bpmInput        = document.getElementById('bpmInput');
+  const sustainInput    = document.getElementById('sustainInput');
+  const btnBassToggle   = document.getElementById('btnBassToggle');
+
+  // ---------- Logging ----------
+
+  function log(msg) {
+    console.log('[JCT]', msg);
+    if (!logBox) return;
+    logBox.textContent += msg + '\n';
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  // ---------- Build chips for qualities & keys ----------
+
+  function makeChip(label, value, container, cls) {
+    const div = document.createElement('div');
+    div.className = 'chip ' + cls;
+    div.textContent = label;
+    div.dataset.value = value;
+    div.addEventListener('click', () => {
+      div.classList.toggle('active');
+    });
+    container.appendChild(div);
+  }
+
+  Object.keys(CHORD_QUALITIES).forEach(q => {
+    makeChip(q, q, qualitiesRow, 'quality-chip');
+  });
+
+  ROOTS.forEach(r => {
+    makeChip(r, r, keysRow, 'key-chip');
+  });
+
+  // ---------- Tone.js instruments ----------
+
+  let sampler = null;      // piano
+  let bassSynth = null;    // simple mono synth bass
+  let audioReady = false;
+  let sessionActive = false;
+  let vampTimer = null;
+  let currentChord = null;
+  let bassEnabled = false;
+
+  async function ensureAudio() {
+    if (audioReady) {
+      log('Audio already ready.');
+      return;
+    }
+    await Tone.start();
+    log('Audio context started.');
+
+    // Piano sampler (Salamander grand)
+    sampler = new Tone.Sampler({
+      urls: {
+        A0:'A0.mp3', C1:'C1.mp3', 'D#1':'Ds1.mp3', 'F#1':'Fs1.mp3', A1:'A1.mp3',
+        C2:'C2.mp3', 'D#2':'Ds2.mp3', 'F#2':'Fs2.mp3', A2:'A2.mp3',
+        C3:'C3.mp3', 'D#3':'Ds3.mp3', 'F#3':'Fs3.mp3', A3:'A3.mp3',
+        C4:'C4.mp3', 'D#4':'Ds4.mp3', 'F#4':'Fs4.mp3', A4:'A4.mp3',
+        C5:'C5.mp3', 'D#5':'Ds5.mp3', 'F#5':'Fs5.mp3', A5:'A5.mp3',
+        C6:'C6.mp3', 'D#6':'Ds6.mp3', 'F#6':'Fs6.mp3', A6:'A6.mp3',
+        C7:'C7.mp3', 'D#7':'Ds7.mp3', 'F#7':'Fs7.mp3', A7:'A7.mp3',
+        C8:'C8.mp3'
+      },
+      baseUrl: 'https://tonejs.github.io/audio/salamander/',
+      onload: () => log('Grand piano loaded.')
+    }).toDestination();
+
+    // Simple bass synth (root-only), slightly lower in volume
+    const bassGain = new Tone.Gain(0.7).toDestination();
+    bassSynth = new Tone.MonoSynth({
+      oscillator: { type: 'triangle' },
+      filter: { Q: 1, type: 'lowpass', rolloff: -24 },
+      envelope: { attack: 0.01, decay: 0.25, sustain: 0.85, release: 1.2 },
+      filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.8, baseFrequency: 90, octaves: 2.5 }
+    }).connect(bassGain);
+
+    audioReady = true;
+    statusLine.textContent = 'Audio ready. Press Start Session.';
+  }
+
+  // ---------- Music helpers ----------
+
+  function midiToName(midi) {
+    const octave = Math.floor(midi / 12) - 1;
+    const name = SEMITONE_TO_NOTE_SHARP[midi % 12];
+    return `${name}${octave}`;
+  }
+
+  function choose(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  function getSelectedValues(selector, fallback) {
+    const chips = Array.from(document.querySelectorAll(selector + '.active'));
+    if (!chips.length) return fallback.slice();
+    return chips.map(c => c.dataset.value);
+  }
+
+  function pickChord() {
+    const allQualities = Object.keys(CHORD_QUALITIES);
+    const allKeys = ROOTS;
+
+    const qualities = getSelectedValues('.quality-chip', allQualities);
+    const keys      = getSelectedValues('.key-chip', allKeys);
+
+    const quality  = choose(qualities);
+    const rootName = choose(keys);
+
+    const intervals = CHORD_QUALITIES[quality];
+    let ints = intervals;
+
+    // Random subset for 7alt
+    if (quality === '7alt') {
+      const base = [0,4,7,10];
+      const alts = [13,15,18,20];
+      const picked = [];
+      while (picked.length < 2) {
+        const x = choose(alts);
+        if (!picked.includes(x)) picked.push(x);
+      }
+      ints = base.concat(picked);
+    }
+
+    const rootMidi = 48 + (NOTE_TO_SEMITONE[rootName] || 0); // around C3
+    const midiNotes = ints.map(iv => rootMidi + iv);
+    const noteNames = midiNotes.map(midiToName);
+
+    return { rootName, quality, noteNames };
+  }
+
+  // ---------- Play chord (piano + optional bass root) ----------
+
+  function playChord(chord, mode, sustainSeconds) {
+    if (!sampler || !chord || !chord.noteNames || chord.noteNames.length === 0) {
+      log('playChord called but sampler or chord missing');
+      return;
+    }
+
+    const now = Tone.now();
+
+    // Bass root (reads bassEnabled every time)
+    if (bassEnabled && bassSynth) {
+      const pitchClassName = chord.rootName;              // e.g. "Db"
+      const semi = NOTE_TO_SEMITONE[pitchClassName];      // 1
+      const sharpName = SEMITONE_TO_NOTE_SHARP[semi];     // "C#"
+      const bassNote = sharpName + "2";                   // "C#2"
+      log('Bass note: ' + bassNote);
+      bassSynth.triggerAttackRelease(bassNote, sustainSeconds * 1.3, now);
+    }
+
+    // Piano
+    log('Piano chord: ' + chord.noteNames.join(', '));
+    if (mode === 'arp' || mode === 'both') {
+      const step = 0.12;
+      chord.noteNames.forEach((n, i) => {
+        sampler.triggerAttackRelease(n, sustainSeconds, now + i * step);
+      });
+    }
+    if (mode === 'block' || mode === 'both') {
+      chord.noteNames.forEach(n => {
+        sampler.triggerAttackRelease(n, sustainSeconds, now);
+      });
+    }
+  }
+
+  // ---------- Session control ----------
+
+  function startVampLoop() {
+    clearInterval(vampTimer);
+    if (!currentChord) return;
+
+    const sustainSeconds = parseFloat(sustainInput.value) || 3;
+    const bpm = parseFloat(bpmInput.value) || 96;
+    const beatsPerBar = 4;
+    const secPerBeat = 60.0 / bpm;
+    const vampPeriod = Math.max(sustainSeconds, beatsPerBar * secPerBeat); // loop every bar or sustain time
+
+    const modeRadio = document.querySelector('input[name="playbackMode"]:checked');
+    const playbackMode = modeRadio ? modeRadio.value : 'block';
+
+    playChord(currentChord, playbackMode, sustainSeconds);
+    vampTimer = setInterval(() => {
+      playChord(currentChord, playbackMode, sustainSeconds);
+    }, vampPeriod * 1000);
+  }
+
+  function nextChord() {
+    if (!sessionActive) {
+      log('nextChord called but session not active.');
+      return;
+    }
+    currentChord = pickChord();
+
+    const label = `${currentChord.rootName}${currentChord.quality}`;
+    chordLabel.textContent = label;
+    statusLine.textContent = 'Chord active. Tap Next Chord (or SPACE) to advance.';
+    scaleHint.textContent = SCALE_SUGGESTIONS[currentChord.quality] || '';
+
+    log('New chord: ' + label);
+    startVampLoop();
+  }
+
+  // ---------- Button handlers ----------
+
+  btnStartAudio.addEventListener('click', async () => {
+    statusLine.textContent = 'Loading piano & bass...';
+    await ensureAudio();
+  });
+
+  btnStartSession.addEventListener('click', () => {
+    if (!audioReady) {
+      statusLine.textContent = 'Start Audio first (required by browser).';
+      return;
+    }
+    sessionActive = true;
+    log('Session started via Start Session.');
+    nextChord();
+  });
+
+  btnNextChord.addEventListener('click', () => {
+    if (!audioReady) {
+      statusLine.textContent = 'Tap Start Audio first.';
+      return;
+    }
+    if (!sessionActive) {
+      sessionActive = true;
+      log('Session auto-started via Next Chord button.');
+    }
+    nextChord();
+  });
+
+  btnStopSession.addEventListener('click', () => {
+    sessionActive = false;
+    clearInterval(vampTimer);
+    chordLabel.textContent = '—';
+    scaleHint.textContent = '';
+    statusLine.textContent = 'Session stopped.';
+    log('Session stopped.');
+  });
+
+  if (btnBassToggle) {
+    // Make the button visually and functionally toggle bass
+    btnBassToggle.addEventListener('click', () => {
+      bassEnabled = !bassEnabled;
+
+      if (bassEnabled) {
+        btnBassToggle.textContent = 'Bass Root: On';
+        btnBassToggle.style.backgroundColor = '#2f6bff';
+        btnBassToggle.style.color = '#ffffff';
+      } else {
+        btnBassToggle.textContent = 'Bass Root: Off';
+        btnBassToggle.style.backgroundColor = '';
+        btnBassToggle.style.color = '';
+      }
+
+      log('Bass root ' + (bassEnabled ? 'ENABLED' : 'DISABLED'));
+
+      // Immediately restart vamp with new bass state if we're in a session
+      if (sessionActive && currentChord) {
+        startVampLoop();
+      }
+    });
+  } else {
+    log('Warning: btnBassToggle not found in DOM; bass toggle disabled.');
+  }
+
+  // SPACE to advance on desktop
+  window.addEventListener('keydown', ev => {
+    if (ev.code === 'Space') {
+      ev.preventDefault();
+      if (sessionActive) {
+        log('SPACE → next chord');
+        nextChord();
+      }
+    }
+  });
+
+});
