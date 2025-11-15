@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnStopSession  = document.getElementById('btnStopSession');
   const bpmInput        = document.getElementById('bpmInput');
   const sustainInput    = document.getElementById('sustainInput');
-  const btnBassToggle   = document.getElementById('btnBassToggle'); // may be null if HTML not updated
+  const btnBassToggle   = document.getElementById('btnBassToggle');
 
   // ---------- Logging ----------
 
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const now = Tone.now();
 
-    // Bass root
+    // Bass root (reads bassEnabled every time)
     if (bassEnabled && bassSynth) {
       const pitchClassName = chord.rootName;              // e.g. "Db"
       const semi = NOTE_TO_SEMITONE[pitchClassName];      // 1
@@ -234,6 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startVampLoop() {
     clearInterval(vampTimer);
+    if (!currentChord) return;
+
     const sustainSeconds = parseFloat(sustainInput.value) || 3;
     const bpm = parseFloat(bpmInput.value) || 96;
     const beatsPerBar = 4;
@@ -304,10 +306,26 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   if (btnBassToggle) {
+    // Make the button visually and functionally toggle bass
     btnBassToggle.addEventListener('click', () => {
       bassEnabled = !bassEnabled;
-      btnBassToggle.textContent = bassEnabled ? 'Bass Root: On' : 'Bass Root: Off';
+
+      if (bassEnabled) {
+        btnBassToggle.textContent = 'Bass Root: On';
+        btnBassToggle.style.backgroundColor = '#2f6bff';
+        btnBassToggle.style.color = '#ffffff';
+      } else {
+        btnBassToggle.textContent = 'Bass Root: Off';
+        btnBassToggle.style.backgroundColor = '';
+        btnBassToggle.style.color = '';
+      }
+
       log('Bass root ' + (bassEnabled ? 'ENABLED' : 'DISABLED'));
+
+      // Immediately restart vamp with new bass state if we're in a session
+      if (sessionActive && currentChord) {
+        startVampLoop();
+      }
     });
   } else {
     log('Warning: btnBassToggle not found in DOM; bass toggle disabled.');
