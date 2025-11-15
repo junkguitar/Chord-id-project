@@ -1,345 +1,123 @@
-// app.js — Jazz Chord Trainer using Tone.Sampler + Salamander Grand + simple Bass Root synth
-
-document.addEventListener('DOMContentLoaded', () => {
-
-  // ---------- Music theory helpers ----------
-
-  const NOTE_TO_SEMITONE = {
-    C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5,
-    'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11
-  };
-
-  const SEMITONE_TO_NOTE_SHARP = [
-    'C','C#','D','D#','E','F','F#','G','G#','A','A#','B'
-  ];
-
-  const CHORD_QUALITIES = {
-    maj7:  [0, 4, 7, 11],
-    '6/9': [0, 4, 7, 9, 14],
-    m7:    [0, 3, 7, 10],
-    m9:    [0, 3, 7, 10, 14],
-    m11:   [0, 3, 7, 10, 14, 17],
-    7:     [0, 4, 7, 10],
-    13:    [0, 4, 7, 10, 14, 21],
-    '7b9': [0, 4, 7, 10, 13],
-    '7#9': [0, 4, 7, 10, 15],
-    '7#11':[0, 4, 7, 10, 18],
-    '7b13':[0, 4, 7, 10, 20],
-    '7alt':[0, 4, 7, 10, 13, 15, 18, 20],
-    m7b5:  [0, 3, 6, 10],
-    dim7:  [0, 3, 6, 9],
-    mMaj7: [0, 3, 7, 11],
-  };
-
-  const SCALE_SUGGESTIONS = {
-    maj7:  "Major (Ionian) or Lydian (#11)",
-    '6/9': "Major pentatonic / Major scale",
-    m7:    "Dorian / Aeolian; minor pentatonic/blues",
-    m9:    "Dorian with 9; melodic minor on IV",
-    m11:   "Dorian; avoid natural 3",
-    7:     "Mixolydian; blues; bebop dominant",
-    13:    "Mixolydian with 13; avoid 11 or #11",
-    '7b9': "Phrygian dominant or altered; dim H-W",
-    '7#9': "Altered scale; minor pentatonic superimposition",
-    '7#11':"Lydian dominant (melodic minor on V)",
-    '7b13':"Mixolydian b13 (melodic minor Mode 5)",
-    '7alt':"Altered (melodic minor b7) / dim H-W",
-    m7b5:  "Locrian / Locrian #2",
-    dim7:  "Whole-Half diminished",
-    mMaj7: "Melodic minor (ascending)",
-  };
-
-  const ROOTS = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
-
-  // ---------- UI elements ----------
-
-  const qualitiesRow = document.getElementById('qualitiesRow');
-  const keysRow      = document.getElementById('keysRow');
-  const statusLine   = document.getElementById('statusLine');
-  const chordLabel   = document.getElementById('chordLabel');
-  const scaleHint    = document.getElementById('scaleHint');
-  const logBox       = document.getElementById('logBox');
-
-  const btnStartAudio   = document.getElementById('btnStartAudio');
-  const btnStartSession = document.getElementById('btnStartSession');
-  const btnNextChord    = document.getElementById('btnNextChord');
-  const btnStopSession  = document.getElementById('btnStopSession');
-  const bpmInput        = document.getElementById('bpmInput');
-  const sustainInput    = document.getElementById('sustainInput');
-  const btnBassToggle   = document.getElementById('btnBassToggle');
-
-  // ---------- Logging ----------
-
-  function log(msg) {
-    console.log('[JCT]', msg);
-    if (!logBox) return;
-    logBox.textContent += msg + '\n';
-    logBox.scrollTop = logBox.scrollHeight;
-  }
-
-  // ---------- Build chips for qualities & keys ----------
-
-  function makeChip(label, value, container, cls) {
-    const div = document.createElement('div');
-    div.className = 'chip ' + cls;
-    div.textContent = label;
-    div.dataset.value = value;
-    div.addEventListener('click', () => {
-      div.classList.toggle('active');
-    });
-    container.appendChild(div);
-  }
-
-  Object.keys(CHORD_QUALITIES).forEach(q => {
-    makeChip(q, q, qualitiesRow, 'quality-chip');
-  });
-
-  ROOTS.forEach(r => {
-    makeChip(r, r, keysRow, 'key-chip');
-  });
-
-  // ---------- Tone.js instruments ----------
-
-  let sampler = null;      // piano
-  let bassSynth = null;    // simple mono synth bass
-  let audioReady = false;
-  let sessionActive = false;
-  let vampTimer = null;
-  let currentChord = null;
-  let bassEnabled = false;
-
-  async function ensureAudio() {
-    if (audioReady) {
-      log('Audio already ready.');
-      return;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Jazz Chord Trainer — Grand Piano</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    body {
+      background: #0d0d0f;
+      color: #eee;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      margin: 0;
+      padding: 20px;
     }
-    await Tone.start();
-    log('Audio context started.');
-
-    // Piano sampler (Salamander grand)
-    sampler = new Tone.Sampler({
-      urls: {
-        A0:'A0.mp3', C1:'C1.mp3', 'D#1':'Ds1.mp3', 'F#1':'Fs1.mp3', A1:'A1.mp3',
-        C2:'C2.mp3', 'D#2':'Ds2.mp3', 'F#2':'Fs2.mp3', A2:'A2.mp3',
-        C3:'C3.mp3', 'D#3':'Ds3.mp3', 'F#3':'Fs3.mp3', A3:'A3.mp3',
-        C4:'C4.mp3', 'D#4':'Ds4.mp3', 'F#4':'Fs4.mp3', A4:'A4.mp3',
-        C5:'C5.mp3', 'D#5':'Ds5.mp3', 'F#5':'Fs5.mp3', A5:'A5.mp3',
-        C6:'C6.mp3', 'D#6':'Ds6.mp3', 'F#6':'Fs6.mp3', A6:'A6.mp3',
-        C7:'C7.mp3', 'D#7':'Ds7.mp3', 'F#7':'Fs7.mp3', A7:'A7.mp3',
-        C8:'C8.mp3'
-      },
-      baseUrl: 'https://tonejs.github.io/audio/salamander/',
-      onload: () => log('Grand piano loaded.')
-    }).toDestination();
-
-    // Simple bass synth (root-only), slightly lower in volume
-    const bassGain = new Tone.Gain(0.7).toDestination();
-    bassSynth = new Tone.MonoSynth({
-      oscillator: { type: 'triangle' },
-      filter: { Q: 1, type: 'lowpass', rolloff: -24 },
-      envelope: { attack: 0.01, decay: 0.25, sustain: 0.85, release: 1.2 },
-      filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.8, baseFrequency: 90, octaves: 2.5 }
-    }).connect(bassGain);
-
-    audioReady = true;
-    statusLine.textContent = 'Audio ready. Press Start Session.';
-  }
-
-  // ---------- Music helpers ----------
-
-  function midiToName(midi) {
-    const octave = Math.floor(midi / 12) - 1;
-    const name = SEMITONE_TO_NOTE_SHARP[midi % 12];
-    return `${name}${octave}`;
-  }
-
-  function choose(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-  }
-
-  function getSelectedValues(selector, fallback) {
-    const chips = Array.from(document.querySelectorAll(selector + '.active'));
-    if (!chips.length) return fallback.slice();
-    return chips.map(c => c.dataset.value);
-  }
-
-  function pickChord() {
-    const allQualities = Object.keys(CHORD_QUALITIES);
-    const allKeys = ROOTS;
-
-    const qualities = getSelectedValues('.quality-chip', allQualities);
-    const keys      = getSelectedValues('.key-chip', allKeys);
-
-    const quality  = choose(qualities);
-    const rootName = choose(keys);
-
-    const intervals = CHORD_QUALITIES[quality];
-    let ints = intervals;
-
-    // Random subset for 7alt
-    if (quality === '7alt') {
-      const base = [0,4,7,10];
-      const alts = [13,15,18,20];
-      const picked = [];
-      while (picked.length < 2) {
-        const x = choose(alts);
-        if (!picked.includes(x)) picked.push(x);
-      }
-      ints = base.concat(picked);
+    h1 { font-size: 26px; margin-bottom: 10px; }
+    .card {
+      background: #1a1a1f;
+      padding: 16px;
+      margin-bottom: 18px;
+      border-radius: 10px;
     }
-
-    const rootMidi = 48 + (NOTE_TO_SEMITONE[rootName] || 0); // around C3
-    const midiNotes = ints.map(iv => rootMidi + iv);
-    const noteNames = midiNotes.map(midiToName);
-
-    return { rootName, quality, noteNames };
-  }
-
-  // ---------- Play chord (piano + optional bass root) ----------
-
-  function playChord(chord, mode, sustainSeconds) {
-    if (!sampler || !chord || !chord.noteNames || chord.noteNames.length === 0) {
-      log('playChord called but sampler or chord missing');
-      return;
+    .btn {
+      background: #333;
+      color: #eee;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-right: 8px;
+      font-size: 15px;
     }
-
-    const now = Tone.now();
-
-    // Bass root (reads bassEnabled every time)
-    if (bassEnabled && bassSynth) {
-      const pitchClassName = chord.rootName;              // e.g. "Db"
-      const semi = NOTE_TO_SEMITONE[pitchClassName];      // 1
-      const sharpName = SEMITONE_TO_NOTE_SHARP[semi];     // "C#"
-      const bassNote = sharpName + "2";                   // "C#2"
-      log('Bass note: ' + bassNote);
-      bassSynth.triggerAttackRelease(bassNote, sustainSeconds * 1.3, now);
+    .btn-primary {
+      background: #2f6bff;
     }
-
-    // Piano
-    log('Piano chord: ' + chord.noteNames.join(', '));
-    if (mode === 'arp' || mode === 'both') {
-      const step = 0.12;
-      chord.noteNames.forEach((n, i) => {
-        sampler.triggerAttackRelease(n, sustainSeconds, now + i * step);
-      });
+    .btn-danger {
+      background: #a83232;
     }
-    if (mode === 'block' || mode === 'both') {
-      chord.noteNames.forEach(n => {
-        sampler.triggerAttackRelease(n, sustainSeconds, now);
-      });
+    .chip {
+      display: inline-block;
+      padding: 6px 12px;
+      margin: 4px;
+      border-radius: 20px;
+      background: #2a2a33;
+      cursor: pointer;
     }
-  }
-
-  // ---------- Session control ----------
-
-  function startVampLoop() {
-    clearInterval(vampTimer);
-    if (!currentChord) return;
-
-    const sustainSeconds = parseFloat(sustainInput.value) || 3;
-    const bpm = parseFloat(bpmInput.value) || 96;
-    const beatsPerBar = 4;
-    const secPerBeat = 60.0 / bpm;
-    const vampPeriod = Math.max(sustainSeconds, beatsPerBar * secPerBeat); // loop every bar or sustain time
-
-    const modeRadio = document.querySelector('input[name="playbackMode"]:checked');
-    const playbackMode = modeRadio ? modeRadio.value : 'block';
-
-    playChord(currentChord, playbackMode, sustainSeconds);
-    vampTimer = setInterval(() => {
-      playChord(currentChord, playbackMode, sustainSeconds);
-    }, vampPeriod * 1000);
-  }
-
-  function nextChord() {
-    if (!sessionActive) {
-      log('nextChord called but session not active.');
-      return;
+    .chip.active {
+      background: #2f6bff;
+      color: #fff;
     }
-    currentChord = pickChord();
-
-    const label = `${currentChord.rootName}${currentChord.quality}`;
-    chordLabel.textContent = label;
-    statusLine.textContent = 'Chord active. Tap Next Chord (or SPACE) to advance.';
-    scaleHint.textContent = SCALE_SUGGESTIONS[currentChord.quality] || '';
-
-    log('New chord: ' + label);
-    startVampLoop();
-  }
-
-  // ---------- Button handlers ----------
-
-  btnStartAudio.addEventListener('click', async () => {
-    statusLine.textContent = 'Loading piano & bass...';
-    await ensureAudio();
-  });
-
-  btnStartSession.addEventListener('click', () => {
-    if (!audioReady) {
-      statusLine.textContent = 'Start Audio first (required by browser).';
-      return;
+    .field-row {
+      margin-top: 10px;
+      margin-bottom: 10px;
     }
-    sessionActive = true;
-    log('Session started via Start Session.');
-    nextChord();
-  });
-
-  btnNextChord.addEventListener('click', () => {
-    if (!audioReady) {
-      statusLine.textContent = 'Tap Start Audio first.';
-      return;
+    .hint {
+      font-size: 14px;
+      opacity: 0.8;
+      margin-top: 5px;
     }
-    if (!sessionActive) {
-      sessionActive = true;
-      log('Session auto-started via Next Chord button.');
-    }
-    nextChord();
-  });
+  </style>
+</head>
 
-  btnStopSession.addEventListener('click', () => {
-    sessionActive = false;
-    clearInterval(vampTimer);
-    chordLabel.textContent = '—';
-    scaleHint.textContent = '';
-    statusLine.textContent = 'Session stopped.';
-    log('Session stopped.');
-  });
+<body>
 
-  if (btnBassToggle) {
-    // Make the button visually and functionally toggle bass
-    btnBassToggle.addEventListener('click', () => {
-      bassEnabled = !bassEnabled;
+<h1>Jazz Chord Trainer — Grand Piano</h1>
+<p>Random roots • Jazz qualities • SPACE or Next button to advance</p>
 
-      if (bassEnabled) {
-        btnBassToggle.textContent = 'Bass Root: On';
-        btnBassToggle.style.backgroundColor = '#2f6bff';
-        btnBassToggle.style.color = '#ffffff';
-      } else {
-        btnBassToggle.textContent = 'Bass Root: Off';
-        btnBassToggle.style.backgroundColor = '';
-        btnBassToggle.style.color = '';
-      }
+<!-- SESSION -->
+<div class="card">
+  <h2>Session</h2>
+  <div class="field-row">
+    <button id="btnStartAudio" class="btn btn-primary">Start Audio</button>
+    <button id="btnStartSession" class="btn">Start Session</button>
+    <button id="btnNextChord" class="btn">Next Chord</button>
+    <button id="btnStopSession" class="btn btn-danger">Stop</button>
+  </div>
+  <div class="hint">
+    Tap <b>Start Audio</b> first (iPhone/iPad required), then <b>Start Session</b>.<br>
+    Tap <b>Next Chord</b> anytime. Desktop users can also press SPACE.
+  </div>
+</div>
 
-      log('Bass root ' + (bassEnabled ? 'ENABLED' : 'DISABLED'));
+<!-- PLAYBACK -->
+<div class="card" id="playbackSection">
+  <h2>Playback</h2>
 
-      // Immediately restart vamp with new bass state if we're in a session
-      if (sessionActive && currentChord) {
-        startVampLoop();
-      }
-    });
-  } else {
-    log('Warning: btnBassToggle not found in DOM; bass toggle disabled.');
-  }
+  <div class="field-row">
+    <label><input type="radio" name="mode" value="block" checked /> Block</label>
+    <label style="margin-left:20px;"><input type="radio" name="mode" value="arp" /> Arpeggio</label>
+    <label style="margin-left:20px;"><input type="radio" name="mode" value="both" /> Both</label>
+  </div>
 
-  // SPACE to advance on desktop
-  window.addEventListener('keydown', ev => {
-    if (ev.code === 'Space') {
-      ev.preventDefault();
-      if (sessionActive) {
-        log('SPACE → next chord');
-        nextChord();
-      }
-    }
-  });
+  <div class="field-row">
+    BPM <input id="bpmInput" type="number" value="96" style="width:60px;margin-left:4px;" />
+    &nbsp;&nbsp;
+    Sustain (s) <input id="sustainInput" type="number" value="3" style="width:60px;margin-left:4px;" />
+  </div>
+</div>
 
-});
+<!-- QUALITIES -->
+<div class="card" id="qualitiesSection">
+  <h2>Qualities</h2>
+  <div id="qualityChips"></div>
+  <div class="hint">Tap to include/exclude. If none selected, all are used.</div>
+</div>
+
+<!-- KEYS -->
+<div class="card" id="keysSection">
+  <h2>Keys</h2>
+  <div id="keyChips"></div>
+  <div class="hint">Tap keys to practice. If none selected, all 12 keys are used.</div>
+</div>
+
+<!-- CURRENT -->
+<div class="card">
+  <h2>Current Chord</h2>
+  <div id="statusLine">---</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
