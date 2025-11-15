@@ -7,7 +7,9 @@ const NOTE_TO_SEMITONE = {
   'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11
 };
 
-const SEMITONE_TO_NOTE_SHARP = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const SEMITONE_TO_NOTE_SHARP = [
+  'C','C#','D','D#','E','F','F#','G','G#','A','A#','B'
+];
 
 const CHORD_QUALITIES = {
   maj7:  [0, 4, 7, 11],
@@ -58,6 +60,7 @@ const logBox       = document.getElementById('logBox');
 
 const btnStartAudio   = document.getElementById('btnStartAudio');
 const btnStartSession = document.getElementById('btnStartSession');
+const btnNextChord    = document.getElementById('btnNextChord');
 const btnStopSession  = document.getElementById('btnStopSession');
 const bpmInput        = document.getElementById('bpmInput');
 const sustainInput    = document.getElementById('sustainInput');
@@ -149,11 +152,12 @@ function pickChord() {
   const qualities = getSelectedValues('.quality-chip', allQualities);
   const keys      = getSelectedValues('.key-chip', allKeys);
 
-  const quality = choose(qualities);
+  const quality  = choose(qualities);
   const rootName = choose(keys);
 
   const intervals = CHORD_QUALITIES[quality];
   let ints = intervals;
+
   if (quality === '7alt') {
     const base = [0,4,7,10];
     const alts = [13,15,18,20];
@@ -217,7 +221,7 @@ function nextChord() {
 
   const label = `${currentChord.rootName}${currentChord.quality}`;
   chordLabel.textContent = label;
-  statusLine.textContent = 'Chord active. Press SPACE to advance.';
+  statusLine.textContent = 'Chord active. Tap Next Chord (or SPACE) to advance.';
   const suggestion = SCALE_SUGGESTIONS[currentChord.quality] || 'Chord tones + approach notes';
   scaleHint.textContent = `Suggested: ${suggestion}`;
 
@@ -245,6 +249,15 @@ btnStartSession.addEventListener('click', async () => {
   nextChord();
 });
 
+btnNextChord.addEventListener('click', () => {
+  if (!sessionActive) {
+    statusLine.textContent = 'Start Session first.';
+    return;
+  }
+  log('Next Chord button pressed');
+  nextChord();
+});
+
 btnStopSession.addEventListener('click', () => {
   sessionActive = false;
   clearInterval(vampTimer);
@@ -254,7 +267,7 @@ btnStopSession.addEventListener('click', () => {
   log('Session stopped.');
 });
 
-// SPACE to advance
+// SPACE to advance on desktop
 window.addEventListener('keydown', ev => {
   if (ev.code === 'Space') {
     ev.preventDefault();
