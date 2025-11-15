@@ -1,4 +1,4 @@
-// app.js — Jazz Chord Trainer using Tone.Sampler + Salamander Grand
+// app.js — Jazz Chord Trainer using Tone.Sampler + Salamander Grand + Upright Bass
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -67,6 +67,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const bpmInput        = document.getElementById('bpmInput');
   const sustainInput    = document.getElementById('sustainInput');
 
+  // Add Bass ON/OFF chip
+  const playbackCard = document.querySelector(".card");
+  const bassChip = document.createElement("div");
+  bassChip.className = "chip";
+  bassChip.textContent = "Bass Root";
+  bassChip.style.marginTop = "10px";
+  bassChip.style.display = "inline-block";
+  bassChip.dataset.value = "bass";
+  bassChip.addEventListener("click", () => {
+    bassChip.classList.toggle("active");
+    log("Bass = " + (bassChip.classList.contains("active") ? "ON" : "OFF"));
+  });
+  playbackCard.appendChild(bassChip);
+
   // ---------- Logging ----------
 
   function log(msg) {
@@ -100,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---------- Tone.js sampler ----------
 
   let sampler = null;
+  let bass = null;
   let audioReady = false;
   let sessionActive = false;
   let vampTimer = null;
@@ -110,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await Tone.start();
     log('Audio context started.');
 
+    // Piano
     sampler = new Tone.Sampler({
       urls: {
         A0:'A0.mp3', C1:'C1.mp3', 'D#1':'Ds1.mp3', 'F#1':'Fs1.mp3', A1:'A1.mp3',
@@ -122,12 +138,25 @@ document.addEventListener('DOMContentLoaded', () => {
         C8:'C8.mp3'
       },
       baseUrl: 'https://tonejs.github.io/audio/salamander/',
-      onload: () => {
-        log('Grand piano loaded.');
-        audioReady = true;
-        statusLine.textContent = 'Audio ready. Press Start Session.';
-      }
+      onload: () => log('Grand piano loaded.')
     }).toDestination();
+
+    // Upright Bass
+    bass = new Tone.Sampler({
+      urls: {
+        C1: "C1.mp3",
+        F1: "F1.mp3",
+        A1: "A1.mp3",
+        C2: "C2.mp3",
+        F2: "F2.mp3",
+        A2: "A2.mp3"
+      },
+      baseUrl: "https://raw.githubusercontent.com/junkguitar/bass-samples/main/upright/",
+      onload: () => log("Bass loaded.")
+    }).toDestination();
+
+    audioReady = true;
+    statusLine.textContent = 'Audio ready. Press Start Session.';
   }
 
   // ---------- Music helpers ----------
@@ -161,12 +190,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const intervals = CHORD_QUALITIES[quality];
     let ints = intervals;
 
+    // Random subset for 7alt
     if (quality === '7alt') {
       const base = [0,4,7,10];
       const alts = [13,15,18,20];
       const picked = [];
       while (picked.length < 2) {
-        const x = alts[Math.floor(Math.random()*alts.length)];
+        const x = choose(alts);
         if (!picked.includes(x)) picked.push(x);
       }
       ints = base.concat(picked);
@@ -176,20 +206,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const midiNotes = ints.map(iv => rootMidi + iv);
     const noteNames = midiNotes.map(midiToName);
 
-    return {
-      rootName,
-      quality,
-      noteNames
-    };
+    return { rootName, quality, noteNames };
   }
 
+  // ---------- Play chord (piano + optional bass) ----------
+
   function playChord(chord, mode, sustainSeconds) {
-    if (!sampler) {
-      log('Sampler not ready when trying to play chord.');
-      return;
-    }
+    if (!sampler) return;
     const now = Tone.now();
 
+    // BASS (root only)
+    if (bass && bassChip.classList.contains("active")) {
+      const root = chord.noteNames[0];            // "C4"
+      const pitchClass = root.replace(/[0-9]/g, "");  // "C"
+      const bassNote = pitchClass + "2";              // "C2"
+      bass.triggerAttackRelease(bassNote, sustainSeconds * 1.3, now);
+    }
+
+    // PIANO
     if (mode === 'arp' || mode === 'both') {
       const step = 0.12;
       chord.noteNames.forEach((n, i) => {
@@ -209,31 +243,25 @@ document.addEventListener('DOMContentLoaded', () => {
     clearInterval(vampTimer);
     const sustainSeconds = parseFloat(sustainInput.value) || 3;
     const bpm = parseFloat(bpmInput.value) || 96;
-    const beatsPerBar = 4;
-    const secPerBeat = 60.0 / bpm;
-    const vampPeriod = Math.max(sustainSeconds, beatsPerBar * secPerBeat); // loop every bar or sustain time
+    const secPerBeat = 60 / bpm;
+    const vampPeriod = Math.max(sustainSeconds, secPerBeat * 4);
 
-    const modeRadio = document.querySelector('input[name="playbackMode"]:checked');
-    const playbackMode = modeRadio ? modeRadio.value : 'block';
+    const mode = (document.querySelector('input[name="playbackMode"]:checked') || {}).value || 'block';
 
-    playChord(currentChord, playbackMode, sustainSeconds);
+    playChord(currentChord, mode, sustainSeconds);
     vampTimer = setInterval(() => {
-      playChord(currentChord, playbackMode, sustainSeconds);
+      playChord(currentChord, mode, sustainSeconds);
     }, vampPeriod * 1000);
   }
 
   function nextChord() {
-    if (!sessionActive) {
-      log('nextChord called but sessionActive=false');
-      return;
-    }
+    if (!sessionActive) return;
     currentChord = pickChord();
 
     const label = `${currentChord.rootName}${currentChord.quality}`;
     chordLabel.textContent = label;
-    statusLine.textContent = 'Chord active. Tap Next Chord (or SPACE) to advance.';
-    const suggestion = SCALE_SUGGESTIONS[currentChord.quality] || 'Chord tones + approach notes';
-    scaleHint.textContent = `Suggested: ${suggestion}`;
+    statusLine.textContent = 'Chord active.';
+    scaleHint.textContent = SCALE_SUGGESTIONS[currentChord.quality] || '';
 
     startVampLoop();
   }
@@ -245,14 +273,13 @@ document.addEventListener('DOMContentLoaded', () => {
       statusLine.textContent = 'Audio already ready.';
       return;
     }
-    statusLine.textContent = 'Starting audio & loading piano...';
+    statusLine.textContent = 'Loading piano & bass...';
     await ensureAudio();
   });
 
-  btnStartSession.addEventListener('click', async () => {
-    log('Start Session tapped');
+  btnStartSession.addEventListener('click', () => {
     if (!audioReady) {
-      statusLine.textContent = 'Start Audio first (required by browser).';
+      statusLine.textContent = 'Start Audio first.';
       return;
     }
     sessionActive = true;
@@ -260,16 +287,14 @@ document.addEventListener('DOMContentLoaded', () => {
     nextChord();
   });
 
-  btnNextChord.addEventListener('click', async () => {
-    log('Next Chord button tapped');
+  btnNextChord.addEventListener('click', () => {
     if (!audioReady) {
       statusLine.textContent = 'Tap Start Audio first.';
       return;
     }
     if (!sessionActive) {
-      // Friendly: auto-start session on first Next tap
-      log('Session was not active; starting now.');
       sessionActive = true;
+      log("Auto-starting session via Next button.");
     }
     nextChord();
   });
@@ -277,20 +302,17 @@ document.addEventListener('DOMContentLoaded', () => {
   btnStopSession.addEventListener('click', () => {
     sessionActive = false;
     clearInterval(vampTimer);
-    statusLine.textContent = 'Session stopped.';
     chordLabel.textContent = '—';
     scaleHint.textContent = '';
+    statusLine.textContent = 'Session stopped.';
     log('Session stopped.');
   });
 
-  // SPACE to advance on desktop
+  // SPACE (desktop)
   window.addEventListener('keydown', ev => {
     if (ev.code === 'Space') {
       ev.preventDefault();
-      if (sessionActive) {
-        log('SPACE → next chord');
-        nextChord();
-      }
+      if (sessionActive) nextChord();
     }
   });
 
