@@ -1,75 +1,226 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Jazz Chord Trainer — PWA (Grand Piano)</title>
-<link rel="manifest" href="manifest.json">
-<style>
-:root{--bg:#0b0f14;--fg:#eaf2fb;--muted:#9fb0c3;--card:#0f1720;--accent:#7cc4ff}
-body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:var(--bg);color:var(--fg)}
-.wrap{max-width:980px;margin:18px auto;padding:18px}
-.header{display:flex;justify-content:space-between;align-items:center}
-.h1{font-size:22px}
-.card{background:var(--card);padding:12px;border-radius:12px;margin-top:12px}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-.pill{padding:6px 10px;border-radius:999px;background:#0b1a24;border:1px solid #183044;cursor:pointer}
-.pill.active{background:#133349;border-color:#3b6ea0;color:#bfe9ff}
-.controls label{display:inline-flex;align-items:center;gap:8px;margin-right:10px}
-.button{background:var(--accent);color:#022; padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
-.small{color:var(--muted);font-size:13px}
-.big{font-size:34px;margin:8px 0}
-.kbd{background:#07121a;padding:4px 6px;border-radius:6px}
-</style>
+  <meta charset="utf-8" />
+  <title>Jazz Chord Trainer — Grand Piano</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #05070a;
+      color: #e9f0ff;
+    }
+    header {
+      padding: 16px 20px;
+      background: #0b1018;
+      border-bottom: 1px solid #1b2233;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+    }
+    header small {
+      opacity: 0.7;
+      font-size: 12px;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 16px 16px 40px;
+    }
+    .card {
+      background: #0d121c;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid #182030;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .row + .row {
+      margin-top: 8px;
+    }
+    .section-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      opacity: 0.7;
+      margin-bottom: 6px;
+    }
+    button, input, label {
+      font-family: inherit;
+      font-size: 14px;
+    }
+    .btn {
+      border: none;
+      border-radius: 999px;
+      padding: 6px 14px;
+      cursor: pointer;
+      background: #1b2335;
+      color: #e9f0ff;
+      transition: background 0.15s, transform 0.05s;
+    }
+    .btn:hover {
+      background: #24304a;
+    }
+    .btn:active {
+      transform: scale(0.97);
+    }
+    .btn-primary {
+      background: #2f6bff;
+    }
+    .btn-primary:hover {
+      background: #3c79ff;
+    }
+    .btn-danger {
+      background: #b02a3c;
+    }
+    .chip {
+      border-radius: 999px;
+      padding: 4px 10px;
+      border: 1px solid #27324a;
+      background: #0a101b;
+      cursor: pointer;
+      font-size: 13px;
+      opacity: 0.85;
+      user-select: none;
+    }
+    .chip.active {
+      background: #2f6bff;
+      border-color: #2f6bff;
+      color: #fff;
+      opacity: 1;
+    }
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .field-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .field-row label {
+      font-size: 13px;
+      opacity: 0.8;
+    }
+    .field-row input[type="number"] {
+      width: 70px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid #27324a;
+      background: #05070a;
+      color: #e9f0ff;
+    }
+    .radio-row label {
+      margin-right: 12px;
+      font-size: 13px;
+      opacity: 0.85;
+      cursor: pointer;
+    }
+    .status-line {
+      font-size: 13px;
+      opacity: 0.8;
+      margin-top: 6px;
+    }
+    .status-strong {
+      font-size: 18px;
+      margin-top: 4px;
+    }
+    .hint {
+      font-size: 12px;
+      opacity: 0.75;
+      margin-top: 4px;
+    }
+    .log {
+      font-size: 11px;
+      white-space: pre-wrap;
+      background: #05070d;
+      border-radius: 8px;
+      border: 1px solid #141b27;
+      padding: 8px;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-top: 6px;
+    }
+  </style>
 </head>
+
 <body>
-<div class="wrap">
-  <div class="header">
-    <div><div class="h1">🎹 Jazz Chord Trainer — Offline Grand Piano</div><div class="small">Block & Arpeggio • Preloaded samples • Install on iPhone</div></div>
-    <div><button id="installBtn" class="button">Install</button></div>
-  </div>
+  <header>
+    <h1>Jazz Chord Trainer — Grand Piano</h1>
+    <small>Random roots • Jazz qualities • SPACE to advance</small>
+  </header>
 
-  <div class="card">
-    <div class="row"><button id="start" class="button">Start Audio</button><button id="startSession" class="button">Start Session</button><button id="stopSession" class="button">Stop</button></div>
-    <div class="big" id="nowChord">—</div>
-    <div class="small" id="hint">Space to advance • Choose qualities & keys below • Toggle Block/Arp</div>
-  </div>
+  <main>
+    <!-- Transport -->
+    <section class="card">
+      <div class="section-title">Session</div>
+      <div class="row">
+        <button id="btnStartAudio" class="btn btn-primary">Start Audio</button>
+        <button id="btnStartSession" class="btn">Start Session</button>
+        <button id="btnStopSession" class="btn btn-danger">Stop</button>
+      </div>
+      <div class="hint">
+        First click <b>Start Audio</b> (required on iPhone/iPad), then <b>Start Session</b>.  
+        Press <b>SPACE</b> to jump to the next chord.
+      </div>
+    </section>
 
-  <div class="card">
-    <div><strong>Playback</strong></div>
-    <div class="row" style="margin-top:8px">
-      <label><input type="radio" name="mode" value="block" checked> Block</label>
-      <label><input type="radio" name="mode" value="arp"> Arpeggio</label>
-      <label><input type="radio" name="mode" value="both"> Both</label>
-    </div>
-  </div>
+    <!-- Playback -->
+    <section class="card">
+      <div class="section-title">Playback</div>
+      <div class="row radio-row">
+        <label><input type="radio" name="playbackMode" value="block" checked> Block</label>
+        <label><input type="radio" name="playbackMode" value="arp"> Arpeggio</label>
+        <label><input type="radio" name="playbackMode" value="both"> Both</label>
+      </div>
+      <div class="field-row">
+        <label>BPM <input type="number" id="bpmInput" value="96" min="40" max="220"></label>
+        <label>Sustain (s) <input type="number" id="sustainInput" value="3" min="1" max="10" step="0.5"></label>
+      </div>
+    </section>
 
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center"><strong>Qualities</strong>
-      <div><button id="allQ" class="pill">All</button> <button id="noneQ" class="pill">None</button></div></div>
-    <div id="qualities" class="row" style="margin-top:8px"></div>
-  </div>
+    <!-- Qualities -->
+    <section class="card">
+      <div class="section-title">Qualities</div>
+      <div id="qualitiesRow" class="chip-row"></div>
+      <div class="hint">Tap to include / exclude. If none selected, all are used.</div>
+    </section>
 
-  <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center"><strong>Keys</strong>
-      <div><button id="allK" class="pill">All</button> <button id="noneK" class="pill">None</button></div></div>
-    <div id="keys" class="row" style="margin-top:8px"></div>
-  </div>
+    <!-- Keys -->
+    <section class="card">
+      <div class="section-title">Keys</div>
+      <div id="keysRow" class="chip-row"></div>
+      <div class="hint">Tap keys to practice. If none selected, all 12 roots are used.</div>
+    </section>
 
-  <div class="card small">
-    <div class="row">
-      <label>BPM <input id="bpm" type="number" value="96" min="30" max="300"></label>
-      <label>Bars <input id="bars" type="number" value="8" min="1" max="32"></label>
-      <label>Sustain(s) <input id="sustain" type="number" step="0.5" value="3" min="0.5"></label>
-      <label><input id="metronome" type="checkbox"> Metronome</label>
-      <label><input id="swing" type="checkbox"> Swing</label>
-    </div>
-  </div>
+    <!-- Current chord -->
+    <section class="card">
+      <div class="section-title">Current chord</div>
+      <div id="statusLine" class="status-line">Session idle.</div>
+      <div id="chordLabel" class="status-strong">—</div>
+      <div id="scaleHint" class="hint"></div>
+    </section>
 
-  <div class="card small">
-    <div>Offline ready — all samples cached on first load. To install on iPhone: open in Safari → Share → Add to Home Screen.</div>
-  </div>
-</div>
-<script src="app.js"></script>
+    <!-- Log -->
+    <section class="card">
+      <div class="section-title">Debug / Log</div>
+      <div id="logBox" class="log"></div>
+    </section>
+  </main>
+
+  <!-- Tone.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  <!-- App logic -->
+  <script src="app.js"></script>
 </body>
 </html>
