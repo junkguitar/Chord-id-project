@@ -4,120 +4,142 @@
   <meta charset="utf-8" />
   <title>Jazz Chord Trainer — Grand Piano</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="manifest" href="manifest.json" />
   <style>
     body {
       background: #0d0d0f;
       color: #eee;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
       margin: 0;
-      padding: 20px;
-    }
-    h1 { font-size: 26px; margin-bottom: 10px; }
-    .card {
-      background: #1a1a1f;
       padding: 16px;
-      margin-bottom: 18px;
-      border-radius: 10px;
     }
+    h1 { font-size: 26px; margin-bottom: 4px; }
+    h2 { font-size: 18px; margin-bottom: 8px; }
+    p  { margin: 4px 0; }
+
+    .card {
+      background: #16171f;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+
     .btn {
-      background: #333;
+      background: #30323d;
       color: #eee;
       border: none;
-      padding: 10px 16px;
-      border-radius: 8px;
-      margin-right: 8px;
+      border-radius: 999px;
+      padding: 8px 14px;
       font-size: 15px;
+      margin-right: 8px;
     }
-    .btn-primary {
-      background: #2f6bff;
+    .btn-primary { background: #2f6bff; }
+    .btn-danger  { background: #c7383c; }
+
+    .field-row {
+      margin-top: 8px;
+      margin-bottom: 8px;
     }
-    .btn-danger {
-      background: #a83232;
-    }
+
     .chip {
       display: inline-block;
-      padding: 6px 12px;
-      margin: 4px;
-      border-radius: 20px;
-      background: #2a2a33;
+      padding: 6px 11px;
+      margin: 3px;
+      border-radius: 999px;
+      background: #252633;
       cursor: pointer;
+      font-size: 14px;
     }
     .chip.active {
       background: #2f6bff;
       color: #fff;
     }
-    .field-row {
-      margin-top: 10px;
-      margin-bottom: 10px;
-    }
+
     .hint {
-      font-size: 14px;
+      font-size: 13px;
       opacity: 0.8;
-      margin-top: 5px;
+    }
+
+    #chordLabel {
+      font-size: 26px;
+      font-weight: 600;
+      margin-top: 4px;
+    }
+    #scaleHint {
+      font-size: 14px;
+      opacity: 0.85;
+      margin-top: 4px;
     }
   </style>
 </head>
-
 <body>
 
-<h1>Jazz Chord Trainer — Grand Piano</h1>
-<p>Random roots • Jazz qualities • SPACE or Next button to advance</p>
+  <h1>Jazz Chord Trainer — Grand Piano</h1>
+  <p class="hint">Random roots • Jazz qualities • SPACE or button to advance</p>
 
-<!-- SESSION -->
-<div class="card">
-  <h2>Session</h2>
-  <div class="field-row">
-    <button id="btnStartAudio" class="btn btn-primary">Start Audio</button>
-    <button id="btnStartSession" class="btn">Start Session</button>
-    <button id="btnNextChord" class="btn">Next Chord</button>
-    <button id="btnStopSession" class="btn btn-danger">Stop</button>
-  </div>
-  <div class="hint">
-    Tap <b>Start Audio</b> first (iPhone/iPad required), then <b>Start Session</b>.<br>
-    Tap <b>Next Chord</b> anytime. Desktop users can also press SPACE.
-  </div>
-</div>
-
-<!-- PLAYBACK -->
-<div class="card" id="playbackSection">
-  <h2>Playback</h2>
-
-  <div class="field-row">
-    <label><input type="radio" name="mode" value="block" checked /> Block</label>
-    <label style="margin-left:20px;"><input type="radio" name="mode" value="arp" /> Arpeggio</label>
-    <label style="margin-left:20px;"><input type="radio" name="mode" value="both" /> Both</label>
+  <!-- SESSION -->
+  <div class="card">
+    <h2>Session</h2>
+    <div class="field-row">
+      <button id="btnStartAudio"   class="btn btn-primary">Start Audio</button>
+      <button id="btnStartSession" class="btn">Start Session</button>
+      <button id="btnNextChord"    class="btn">Next Chord</button>
+      <button id="btnStopSession"  class="btn btn-danger">Stop</button>
+    </div>
+    <p class="hint">
+      On iPhone/iPad: tap <b>Start Audio</b> once, then <b>Start Session</b>.<br>
+      Tap <b>Next Chord</b> for a new chord. On desktop you can also press <b>SPACE</b>.
+    </p>
   </div>
 
-  <div class="field-row">
-    BPM <input id="bpmInput" type="number" value="96" style="width:60px;margin-left:4px;" />
-    &nbsp;&nbsp;
-    Sustain (s) <input id="sustainInput" type="number" value="3" style="width:60px;margin-left:4px;" />
+  <!-- PLAYBACK -->
+  <div class="card" id="playbackSection">
+    <h2>Playback</h2>
+
+    <div class="field-row">
+      <label><input type="radio" name="playbackMode" value="block" checked> Block</label>
+      <label style="margin-left:16px;">
+        <input type="radio" name="playbackMode" value="arp"> Arpeggio
+      </label>
+      <label style="margin-left:16px;">
+        <input type="radio" name="playbackMode" value="both"> Both
+      </label>
+    </div>
+
+    <div class="field-row">
+      BPM
+      <input id="bpmInput" type="number" value="96" style="width:60px;margin-left:4px;">
+      &nbsp;&nbsp; Sustain (s)
+      <input id="sustainInput" type="number" value="3" style="width:60px;margin-left:4px;">
+      &nbsp;&nbsp;
+      <!-- Bass toggle lives directly in HTML so JS can always find it -->
+      <button id="btnBassToggle" class="btn">Bass Root: Off</button>
+    </div>
+    <p class="hint">Bass Root doubles the chord root an octave or two below.</p>
   </div>
-</div>
 
-<!-- QUALITIES -->
-<div class="card" id="qualitiesSection">
-  <h2>Qualities</h2>
-  <div id="qualityChips"></div>
-  <div class="hint">Tap to include/exclude. If none selected, all are used.</div>
-</div>
+  <!-- QUALITIES -->
+  <div class="card">
+    <h2>Qualities</h2>
+    <div id="qualitiesRow"></div>
+    <p class="hint">Tap to include / exclude. If none are active, all qualities are used.</p>
+  </div>
 
-<!-- KEYS -->
-<div class="card" id="keysSection">
-  <h2>Keys</h2>
-  <div id="keyChips"></div>
-  <div class="hint">Tap keys to practice. If none selected, all 12 keys are used.</div>
-</div>
+  <!-- KEYS -->
+  <div class="card">
+    <h2>Keys</h2>
+    <div id="keysRow"></div>
+    <p class="hint">Tap roots to practice. If none are active, all 12 keys are used.</p>
+  </div>
 
-<!-- CURRENT -->
-<div class="card">
-  <h2>Current Chord</h2>
-  <div id="statusLine">---</div>
-</div>
+  <!-- CURRENT CHORD -->
+  <div class="card">
+    <h2>Current Chord</h2>
+    <div id="chordLabel">—</div>
+    <div id="scaleHint"></div>
+    <p id="statusLine" class="hint">Tap Start Audio.</p>
+  </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
-<script src="app.js"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
