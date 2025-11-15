@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Piano Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body style="background:#111;color:#eee;font-family:sans-serif;padding:20px;">
+  <h2>Piano Sound Test</h2>
+  <p>1) Tap <b>Start Audio</b> once (unmutes iPhone/iPad).<br>
+     2) Then tap <b>Play Cmaj7</b> to hear a bright grand piano chord.</p>
+
+  <button id="startBtn">Start Audio</button>
+  <button id="playBtn" disabled>Play Cmaj7</button>
+
+  <!-- Load the piano soundfont player (uses acoustic_grand_piano soundfont) -->
+  <script src="https://unpkg.com/soundfont-player@0.7.5/dist/soundfont-player.min.js"></script>
+  <script>
+    let audioCtx = null;
+    let piano = null;
+
+    const startBtn = document.getElementById('startBtn');
+    const playBtn  = document.getElementById('playBtn');
+
+    startBtn.onclick = async () => {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Load a bright grand piano instrument
+        piano = await Soundfont.instrument(audioCtx, 'acoustic_grand_piano');
+      }
+      playBtn.disabled = false;
+      startBtn.textContent = 'Audio Ready';
+    };
+
+    playBtn.onclick = () => {
+      if (!piano || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      const notes = ['C4', 'E4', 'G4', 'B4']; // Cmaj7 chord
+      notes.forEach(n => {
+        piano.play(n, now, {
+          gain: 0.8,
+          duration: 3.0 // hold ~3 seconds
+        });
+      });
+    };
+  </script>
+</body>
+</html>
