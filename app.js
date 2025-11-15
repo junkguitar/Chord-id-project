@@ -1,5 +1,6 @@
-// Jazz Chord Trainer — Salamander piano + simple bass root
-// Works on desktop + iPhone/iPad (after Start Audio tap)
+// Jazz Chord Trainer — Salamander piano with low-root doubling
+// Bass Root uses the same grand piano samples in a lower octave,
+// so it sustains and decays with the chord.
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -100,7 +101,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---------- Tone.js instruments ----------
 
   let sampler = null;
-  let bassSynth = null;
   let audioReady = false;
 
   async function ensureAudio() {
@@ -123,21 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
       onload: () => log('Grand piano loaded. Ready.')
     }).toDestination();
 
-    const bassGain = new Tone.Gain(0.7).toDestination();
-    bassSynth = new Tone.MonoSynth({
-      oscillator: { type: 'triangle' },
-      filter: { Q: 1, type: 'lowpass', rolloff: -24 },
-      envelope: { attack: 0.01, decay: 0.25, sustain: 0.85, release: 1.2 },
-      filterEnvelope: {
-        attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.8,
-        baseFrequency: 90, octaves: 2.5
-      }
-    }).connect(bassGain);
-
     audioReady = true;
   }
 
-  // ---------- Chord selection ----------
+  // ---------- Helpers ----------
 
   function midiToName(midi) {
     const octave = Math.floor(midi / 12) - 1;
@@ -169,7 +158,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const midiNotes = intervals.map(iv => rootMidi + iv);
     const noteNames = midiNotes.map(midiToName);
 
-    return { rootName: r, quality: q, noteNames };
+    return { rootMidi, rootName: r, quality: q, noteNames };
+  }
+
+  function showChordInfo() {
+    if (!currentChord) return;
+    const label = `${currentChord.rootName}${currentChord.quality}`;
+    chordLabel.textContent = label;
+    scaleHint.textContent = SCALE_SUGGESTIONS[currentChord.quality] || '';
+    log(`Chord: ${label}`);
   }
 
   // ---------- Playback ----------
@@ -187,15 +184,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const modeRadio = document.querySelector('input[name="playbackMode"]:checked');
     const mode = modeRadio ? modeRadio.value : 'block';
 
-    // Bass root
-    if (bassEnabled && bassSynth) {
-      const semi = NOTE_TO_SEMITONE[currentChord.rootName];
-      const sharpName = SEMITONE_TO_NOTE_SHARP[semi];
-      const bassNote = sharpName + '2';
-      bassSynth.triggerAttackRelease(bassNote, sustainSec*1.4, now);
+    // --- Low root using the same piano sampler ---
+    if (bassEnabled) {
+      // rootMidi is main register (~C3). Drop one octave for bass.
+      const bassMidi = currentChord.rootMidi - 12;
+      const bassNote = midiToName(bassMidi);
+      sampler.triggerAttackRelease(bassNote, sustainSec, now);
     }
 
-    // Piano
+    // --- Chord in main register ---
     if (mode === 'block' || mode === 'both') {
       currentChord.noteNames.forEach(n => {
         sampler.triggerAttackRelease(n, sustainSec, now);
@@ -222,14 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     playChordNow();
     loopTimer = setInterval(playChordNow, period * 1000);
-  }
-
-  function showChordInfo() {
-    if (!currentChord) return;
-    const label = `${currentChord.rootName}${currentChord.quality}`;
-    chordLabel.textContent = label;
-    scaleHint.textContent = SCALE_SUGGESTIONS[currentChord.quality] || '';
-    log(`Chord: ${label}`);
   }
 
   // ---------- Button handlers ----------
