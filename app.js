@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnStopSession  = document.getElementById('btnStopSession');
   const bpmInput        = document.getElementById('bpmInput');
   const sustainInput    = document.getElementById('sustainInput');
-  const btnBassToggle   = document.getElementById('btnBassToggle');
+  const btnBassToggle   = document.getElementById('btnBassToggle'); // may be null if HTML not updated
 
   // ---------- Logging ----------
 
@@ -109,7 +109,10 @@ document.addEventListener('DOMContentLoaded', () => {
   let bassEnabled = false;
 
   async function ensureAudio() {
-    if (audioReady) return;
+    if (audioReady) {
+      log('Audio already ready.');
+      return;
+    }
     await Tone.start();
     log('Audio context started.');
 
@@ -129,13 +132,14 @@ document.addEventListener('DOMContentLoaded', () => {
       onload: () => log('Grand piano loaded.')
     }).toDestination();
 
-    // Simple bass synth (root-only)
+    // Simple bass synth (root-only), slightly lower in volume
+    const bassGain = new Tone.Gain(0.7).toDestination();
     bassSynth = new Tone.MonoSynth({
       oscillator: { type: 'triangle' },
       filter: { Q: 1, type: 'lowpass', rolloff: -24 },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0.8, release: 1.5 },
-      filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 1.0, baseFrequency: 100, octaves: 2.5 }
-    }).toDestination();
+      envelope: { attack: 0.01, decay: 0.25, sustain: 0.85, release: 1.2 },
+      filterEnvelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.8, baseFrequency: 90, octaves: 2.5 }
+    }).connect(bassGain);
 
     audioReady = true;
     statusLine.textContent = 'Audio ready. Press Start Session.';
@@ -194,18 +198,25 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---------- Play chord (piano + optional bass root) ----------
 
   function playChord(chord, mode, sustainSeconds) {
-    if (!sampler) return;
+    if (!sampler || !chord || !chord.noteNames || chord.noteNames.length === 0) {
+      log('playChord called but sampler or chord missing');
+      return;
+    }
+
     const now = Tone.now();
 
     // Bass root
-    if (bassEnabled && bassSynth && chord.noteNames.length > 0) {
-      const root = chord.noteNames[0];               // e.g. "C4"
-      const pitchClass = root.replace(/[0-9]/g, ""); // "C"
-      const bassNote = pitchClass + "2";             // "C2"
+    if (bassEnabled && bassSynth) {
+      const pitchClassName = chord.rootName;              // e.g. "Db"
+      const semi = NOTE_TO_SEMITONE[pitchClassName];      // 1
+      const sharpName = SEMITONE_TO_NOTE_SHARP[semi];     // "C#"
+      const bassNote = sharpName + "2";                   // "C#2"
+      log('Bass note: ' + bassNote);
       bassSynth.triggerAttackRelease(bassNote, sustainSeconds * 1.3, now);
     }
 
     // Piano
+    log('Piano chord: ' + chord.noteNames.join(', '));
     if (mode === 'arp' || mode === 'both') {
       const step = 0.12;
       chord.noteNames.forEach((n, i) => {
@@ -250,16 +261,13 @@ document.addEventListener('DOMContentLoaded', () => {
     statusLine.textContent = 'Chord active. Tap Next Chord (or SPACE) to advance.';
     scaleHint.textContent = SCALE_SUGGESTIONS[currentChord.quality] || '';
 
+    log('New chord: ' + label);
     startVampLoop();
   }
 
   // ---------- Button handlers ----------
 
   btnStartAudio.addEventListener('click', async () => {
-    if (audioReady) {
-      statusLine.textContent = 'Audio already ready.';
-      return;
-    }
     statusLine.textContent = 'Loading piano & bass...';
     await ensureAudio();
   });
@@ -270,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     sessionActive = true;
-    log('Session started.');
+    log('Session started via Start Session.');
     nextChord();
   });
 
@@ -281,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (!sessionActive) {
       sessionActive = true;
-      log('Auto-starting session via Next button.');
+      log('Session auto-started via Next Chord button.');
     }
     nextChord();
   });
@@ -295,11 +303,15 @@ document.addEventListener('DOMContentLoaded', () => {
     log('Session stopped.');
   });
 
-  btnBassToggle.addEventListener('click', () => {
-    bassEnabled = !bassEnabled;
-    btnBassToggle.textContent = bassEnabled ? 'Bass Root: On' : 'Bass Root: Off';
-    log('Bass root ' + (bassEnabled ? 'ENABLED' : 'DISABLED'));
-  });
+  if (btnBassToggle) {
+    btnBassToggle.addEventListener('click', () => {
+      bassEnabled = !bassEnabled;
+      btnBassToggle.textContent = bassEnabled ? 'Bass Root: On' : 'Bass Root: Off';
+      log('Bass root ' + (bassEnabled ? 'ENABLED' : 'DISABLED'));
+    });
+  } else {
+    log('Warning: btnBassToggle not found in DOM; bass toggle disabled.');
+  }
 
   // SPACE to advance on desktop
   window.addEventListener('keydown', ev => {
