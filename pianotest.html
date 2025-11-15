@@ -2,18 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Piano Test</title>
+  <title>Piano Sound Test</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
 <body style="background:#111;color:#eee;font-family:sans-serif;padding:20px;">
   <h2>Piano Sound Test</h2>
-  <p>1) Tap <b>Start Audio</b> once (unmutes iPhone/iPad).<br>
-     2) Then tap <b>Play Cmaj7</b> to hear a bright grand piano chord.</p>
+  <p>1) Click <b>Start Audio</b> once (unmutes browser).<br>
+     2) Then click <b>Play Cmaj7</b> to hear a bright grand piano chord.</p>
 
   <button id="startBtn">Start Audio</button>
   <button id="playBtn" disabled>Play Cmaj7</button>
 
-  <!-- Load the piano soundfont player (uses acoustic_grand_piano soundfont) -->
+  <pre id="log" style="margin-top:20px;font-size:12px;background:#222;padding:10px;max-width:600px;white-space:pre-wrap;"></pre>
+
+  <!-- Soundfont player library -->
   <script src="https://unpkg.com/soundfont-player@0.7.5/dist/soundfont-player.min.js"></script>
   <script>
     let audioCtx = null;
@@ -21,28 +23,66 @@
 
     const startBtn = document.getElementById('startBtn');
     const playBtn  = document.getElementById('playBtn');
+    const logEl    = document.getElementById('log');
+
+    function log(msg) {
+      console.log('[TEST]', msg);
+      logEl.textContent += msg + '\n';
+    }
 
     startBtn.onclick = async () => {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        // Load a bright grand piano instrument
-        piano = await Soundfont.instrument(audioCtx, 'acoustic_grand_piano');
+      try {
+        if (!audioCtx) {
+          const Ctor = window.AudioContext || window.webkitAudioContext;
+          if (!Ctor) {
+            alert('Web Audio not supported in this browser.');
+            return;
+          }
+          audioCtx = new Ctor();
+          log('AudioContext created.');
+        }
+        await audioCtx.resume();
+        log('AudioContext state: ' + audioCtx.state);
+
+        // load piano instrument once
+        if (!piano) {
+          log('Loading acoustic_grand_piano soundfont…');
+          piano = await Soundfont.instrument(audioCtx, 'acoustic_grand_piano');
+          log('Piano loaded.');
+        }
+
+        playBtn.disabled = false;
+        startBtn.textContent = 'Audio Ready';
+      } catch (err) {
+        log('ERROR in Start Audio: ' + err.message);
+        alert('Error starting audio: ' + err.message);
       }
-      playBtn.disabled = false;
-      startBtn.textContent = 'Audio Ready';
     };
 
-    playBtn.onclick = () => {
-      if (!piano || !audioCtx) return;
-      const now = audioCtx.currentTime;
-      const notes = ['C4', 'E4', 'G4', 'B4']; // Cmaj7 chord
-      notes.forEach(n => {
-        piano.play(n, now, {
-          gain: 0.8,
-          duration: 3.0 // hold ~3 seconds
+    playBtn.onclick = async () => {
+      try {
+        if (!audioCtx || !piano) {
+          log('No audioCtx or piano.');
+          return;
+        }
+        await audioCtx.resume();
+        log('Playing Cmaj7…');
+
+        const now = audioCtx.currentTime;
+        const notes = ['C4', 'E4', 'G4', 'B4']; // Cmaj7
+
+        notes.forEach(n => {
+          piano.play(n, now, {
+            gain: 0.8,
+            duration: 3.0
+          });
         });
-      });
+      } catch (err) {
+        log('ERROR in Play: ' + err.message);
+        alert('Error playing: ' + err.message);
+      }
     };
   </script>
 </body>
 </html>
+
