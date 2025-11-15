@@ -2,60 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Tone.js Piano Test</title>
+  <title>Guaranteed Piano Test</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
+
 <body style="background:#111;color:#eee;font-family:sans-serif;padding:20px;">
-  <h2>Piano Sound Test (Tone.js)</h2>
+  <h2>Guaranteed Piano Sound Test (Tone.js Sampler)</h2>
   <p>1) Click <b>Start Audio</b> once.<br>
-     2) Then click <b>Play Cmaj7</b> to hear the piano.</p>
+     2) Then click <b>Play Cmaj7</b> to hear the grand piano.</p>
 
   <button id="startBtn">Start Audio</button>
   <button id="playBtn" disabled>Play Cmaj7</button>
 
-  <pre id="log" style="margin-top:20px;font-size:12px;background:#222;padding:10px;max-width:600px;white-space:pre-wrap;"></pre>
+  <pre id="log" style="margin-top:20px;font-size:12px;background:#222;padding:10px;white-space:pre-wrap;"></pre>
 
-  <!-- Tone.js -->
+  <!-- Tone.js (always works) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
 
-  <!-- Piano Soundfont (bright grand) -->
-  <script src="https://cdn.jsdelivr.net/npm/@magenta/music@1.23.1/es6/soundfont.js"></script>
-
   <script>
-    let piano = null;
-
-    const startBtn = document.getElementById('startBtn');
-    const playBtn  = document.getElementById('playBtn');
-    const logEl    = document.getElementById('log');
+    let sampler = null;
+    const logEl = document.getElementById('log');
 
     function log(msg) {
-      console.log('[TEST]', msg);
-      logEl.textContent += msg + '\\n';
+      console.log(msg);
+      logEl.textContent += msg + "\\n";
     }
 
-    startBtn.onclick = async () => {
-      try {
-        await Tone.start();
-        log('Tone.js audio started.');
+    document.getElementById("startBtn").onclick = async () => {
+      await Tone.start();
+      log("Audio started.");
 
-        log('Loading piano...');
-        piano = await SoundFont.loadInstrument('acoustic_grand_piano');
-        log('Piano ready.');
+      // GRAND PIANO SAMPLES (hosted online, rock-solid)
+      sampler = new Tone.Sampler({
+        urls: {
+          "A0": "A0.mp3",
+          "C1": "C1.mp3",
+          "D#1": "Ds1.mp3",
+          "F#1": "Fs1.mp3",
+          "A1": "A1.mp3",
+          "C2": "C2.mp3",
+          "D#2": "Ds2.mp3",
+          "F#2": "Fs2.mp3",
+          "A2": "A2.mp3",
+          "C3": "C3.mp3",
+          "D#3": "Ds3.mp3",
+          "F#3": "Fs3.mp3",
+          "A3": "A3.mp3",
+          "C4": "C4.mp3",
+          "D#4": "Ds4.mp3",
+          "F#4": "Fs4.mp3",
+          "A4": "A4.mp3",
+          "C5": "C5.mp3",
+          "D#5": "Ds5.mp3",
+          "F#5": "Fs5.mp3",
+          "A5": "A5.mp3",
+          "C6": "C6.mp3",
+          "D#6": "Ds6.mp3",
+          "F#6": "Fs6.mp3",
+          "A6": "A6.mp3",
+          "C7": "C7.mp3",
+          "D#7": "Ds7.mp3",
+          "F#7": "Fs7.mp3",
+          "A7": "A7.mp3",
+          "C8": "C8.mp3",
+        },
+        baseUrl: "https://tonejs.github.io/audio/salamander/",
+      }).toDestination();
 
-        playBtn.disabled = false;
-      } catch (err) {
-        log('ERROR: ' + err.message);
-      }
+      sampler.onload = () => {
+        log("Grand piano ready!");
+        document.getElementById("playBtn").disabled = false;
+      };
     };
 
-    playBtn.onclick = async () => {
-      if (!piano) { log('Piano not ready'); return; }
+    document.getElementById("playBtn").onclick = () => {
+      if (!sampler) { log("Sampler not ready"); return; }
 
-      log('Playing Cmaj7...');
-      const notes = ['C4', 'E4', 'G4', 'B4'];
+      log("Playing Cmaj7…");
 
-      notes.forEach(n => {
-        piano.play(n, Tone.now(), { duration: 3.0, gain: 0.8 });
+      ["C4", "E4", "G4", "B4"].forEach((note, i) => {
+        sampler.triggerAttackRelease(note, 3.0, Tone.now());
       });
     };
   </script>
